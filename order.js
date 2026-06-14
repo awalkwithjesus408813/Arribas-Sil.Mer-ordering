@@ -119,6 +119,33 @@
   const catRow = el("catRow");
   const cartBar = el("cartBar");
 
+  /* ---------- click-and-drag to scroll the category bar ---------- */
+  (function enableCatDrag() {
+    const bar = document.querySelector(".cat-bar");
+    if (!bar) return;
+    let down = false, startX = 0, startLeft = 0, moved = false;
+    bar.addEventListener("pointerdown", (e) => {
+      down = true; moved = false;
+      startX = e.clientX; startLeft = bar.scrollLeft;
+      bar.classList.add("dragging");
+      try { bar.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    bar.addEventListener("pointermove", (e) => {
+      if (!down) return;
+      const dx = e.clientX - startX;
+      if (Math.abs(dx) > 4) moved = true;
+      bar.scrollLeft = startLeft - dx;
+    });
+    const end = () => { down = false; bar.classList.remove("dragging"); };
+    bar.addEventListener("pointerup", end);
+    bar.addEventListener("pointercancel", end);
+    bar.addEventListener("pointerleave", end);
+    // if the press turned into a drag, swallow the click so it doesn't switch category
+    bar.addEventListener("click", (e) => {
+      if (moved) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+  })();
+
   /* ---------- language switcher ---------- */
   function buildLangSwitch() {
     el("langSwitch").innerHTML = window.I18N_ORDER.map(
