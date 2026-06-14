@@ -119,30 +119,32 @@
   const catRow = el("catRow");
   const cartBar = el("cartBar");
 
-  /* ---------- click-and-drag to scroll the category bar ---------- */
+  /* ---------- click-and-drag to scroll the category bar ----------
+     Touch screens already scroll the bar natively with a finger-swipe,
+     so we ONLY add mouse drag here — and we never capture the pointer,
+     so tapping a category always switches the menu. */
   (function enableCatDrag() {
     const bar = document.querySelector(".cat-bar");
     if (!bar) return;
     let down = false, startX = 0, startLeft = 0, moved = false;
     bar.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "mouse" || e.button !== 0) return; // touch = native scroll
       down = true; moved = false;
       startX = e.clientX; startLeft = bar.scrollLeft;
-      bar.classList.add("dragging");
-      try { bar.setPointerCapture(e.pointerId); } catch (_) {}
     });
     bar.addEventListener("pointermove", (e) => {
       if (!down) return;
       const dx = e.clientX - startX;
-      if (Math.abs(dx) > 4) moved = true;
-      bar.scrollLeft = startLeft - dx;
+      if (!moved && Math.abs(dx) > 8) { moved = true; bar.classList.add("dragging"); }
+      if (moved) bar.scrollLeft = startLeft - dx;
     });
     const end = () => { down = false; bar.classList.remove("dragging"); };
     bar.addEventListener("pointerup", end);
     bar.addEventListener("pointercancel", end);
     bar.addEventListener("pointerleave", end);
-    // if the press turned into a drag, swallow the click so it doesn't switch category
+    // only swallow the click when it was a real drag, so taps still switch menus
     bar.addEventListener("click", (e) => {
-      if (moved) { e.preventDefault(); e.stopPropagation(); }
+      if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; }
     }, true);
   })();
 
@@ -350,6 +352,7 @@
     const items = cartArray().map(({ product, qty }) => ({
       id: product.id, style: product.style, description: product.description,
       qty, price: Number(product.price || 0), imageUrl: product.imageUrl || "",
+      barcode: product.barcode || "",
     }));
     const { total } = cartTotals();
     const now = new Date();
@@ -393,9 +396,16 @@
   /* ---------- printable ticket ---------- */
   function printTicket() {
     if (!lastOrder) return;
-    const itemsHtml = lastOrder.items.map(
-      (it) => `<div class="ticket-line"><span>${escapeHtml(it.style)} × ${it.qty}</span><span>${yen(it.price * it.qty)}</span></div>`
-    ).join("");
+    const itemsHtml = lastOrder.items.map((it) => {
+      const line = `<div class="ticket-line"><span>${escapeHtml(it.style)} × ${it.qty}</span><span>${yen(it.price * it.qty)}</span></div>`;
+      const raw = String(it.barcode || "").replace(/\D/g, "");
+      let codeBlock = "";
+      if (raw) {
+        const svg = ean13SVG(raw);
+        codeBlock = `<div class="ticket-barcode">${svg || ""}<div class="ticket-jan">${escapeHtml(svg ? normalizeJan(raw) : raw)}</div></div>`;
+      }
+      return `<div class="ticket-item">${line}${codeBlock}</div>`;
+    }).join("");
     el("ticket").innerHTML = `
       <div class="ticket-logo">Arribas Japan</div>
       <div class="ticket-store">${store.name} · ${store.park}</div>
@@ -419,6 +429,43 @@
   function escapeHtml(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  /* ---------- JAN / EAN-13 barcode (pure SVG, prints scannable) ---------- */
+  function janCheckDigit(d12) {
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += (+d12[i]) * (i % 2 ? 3 : 1);
+    return String((10 - (sum % 10)) % 10);
+  }
+  function normalizeJan(raw) {
+    const d = String(raw).replace(/\D/g, "");
+    if (d.length === 12) return d + janCheckDigit(d);
+    if (d.length === 13) return d;
+    return "";
+  }
+  function ean13SVG(raw) {
+    const code = normalizeJan(raw);
+    if (!code) return null;
+    const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
+    const G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
+    const R = ["1110010","1100110","1101100","1000010","1011100","1001110","1010000","1000100","1001000","1110100"];
+    const parity = ["LLLLLL","LLGLGG","LLGGLG","LLGGGL","LGLLGG","LGGLLG","LGGGLL","LGLGLG","LGLGGL","LGGLGL"];
+    const first = +code[0];
+    const left = code.slice(1, 7), right = code.slice(7);
+    let bits = "101";
+    const pat = parity[first];
+    for (let i = 0; i < 6; i++) bits += (pat[i] === "L" ? L : G)[+left[i]];
+    bits += "01010";
+    for (let i = 0; i < 6; i++) bits += R[+right[i]];
+    bits += "101";
+    const barW = 2, h = 70, quiet = 10 * barW;
+    let x = quiet, rects = "";
+    for (const b of bits) {
+      if (b === "1") rects += `<rect x="${x}" y="0" width="${barW}" height="${h}"/>`;
+      x += barW;
+    }
+    const w = x + quiet;
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${w}" height="${h}" fill="#fff"/><g fill="#000">${rects}</g></svg>`;
   }
 
   /* ---------- wire events ---------- */

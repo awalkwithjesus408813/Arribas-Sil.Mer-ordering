@@ -621,6 +621,10 @@ body::before {
   .ticket-num { text-align: center; font-family: var(--font-display); font-size: 40pt; line-height: 1; margin: 1mm 0 3mm; }
   .ticket-guest { text-align: center; font-size: 12pt; margin-bottom: 3mm; }
   .ticket-line { display: flex; justify-content: space-between; font-size: 10pt; margin: 1mm 0; }
+  .ticket-item { margin: 2mm 0 3.5mm; break-inside: avoid; }
+  .ticket-barcode { text-align: center; margin-top: 1.5mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ticket-barcode svg { width: 48mm; height: 15mm; display: inline-block; }
+  .ticket-jan { text-align: center; font-size: 9pt; letter-spacing: 0.22em; font-variant-numeric: tabular-nums; margin-top: 0.5mm; }
   .ticket-total { display: flex; justify-content: space-between; font-size: 12pt; font-weight: 700; margin-top: 2mm; }
   .ticket-foot { text-align: center; font-size: 9pt; margin-top: 4mm; }
 
